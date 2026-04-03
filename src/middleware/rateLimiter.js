@@ -1,4 +1,5 @@
 const { fixedWindow } = require("../algorithms/fixedWindow");
+const { slidingWindow } = require("../algorithms/slidingWindow");
 const { extractIdentifier } = require("../utils/identifier");
 const { isHealthy } = require("../config/redis");
 const { FAIL_OPEN } = require("../config/env");
@@ -11,6 +12,7 @@ const setHeaders = (res, { limit, remaining, resetAt }) => {
 
 const ALGORITHMS = {
   fixed: fixedWindow,
+  sliding: slidingWindow,
 };
 
 const createRateLimiter = ({

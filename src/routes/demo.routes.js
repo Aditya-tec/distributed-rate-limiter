@@ -14,4 +14,16 @@ router.get(
   }
 );
 
+// Sliding window — 5 requests per 30 seconds, by API key
+router.get(
+  "/authenticated",
+  createRateLimiter({ algorithm: "sliding", limit: 5, windowMs: 30000 }),
+  (req, res) => {
+    res.json({
+      message: "✅ Request allowed",
+      rateLimit: req.rateLimit,
+    });
+  }
+);
+
 module.exports = router;
