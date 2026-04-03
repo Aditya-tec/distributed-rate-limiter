@@ -26,4 +26,20 @@ router.get(
   }
 );
 
+// Token bucket — burst of 5, refills 1 token every 2 seconds
+router.post(
+  "/expensive",
+  createRateLimiter({
+    algorithm: "token",
+    capacity: 5,
+    refillRate: 0.5,
+  }),
+  (req, res) => {
+    res.json({
+      message: "✅ Request allowed",
+      rateLimit: req.rateLimit,
+    });
+  }
+);
+
 module.exports = router;
