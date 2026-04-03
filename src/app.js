@@ -2,6 +2,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const morgan = require("morgan");
+const demoRoutes = require("./routes/demo.routes");
 
 const app = express();
 
@@ -19,5 +20,7 @@ app.get("/health", async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use("/demo", demoRoutes);
 
 module.exports = app;
