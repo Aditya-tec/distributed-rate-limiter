@@ -1,3 +1,5 @@
+const { record } = require("../metrics/collector");
+const { pushEvent } = require("../controllers/admin.controller");
 const { fixedWindow } = require("../algorithms/fixedWindow");
 const { slidingWindow } = require("../algorithms/slidingWindow");
 const { tokenBucket } = require("../algorithms/tokenBucket");
@@ -81,7 +83,49 @@ const createRateLimiter = ({
       }
 
       req.rateLimit = result;
+if (!result.allowed) {
+        res.setHeader(
+          "Retry-After",
+          result.resetAt - Math.floor(Date.now() / 1000)
+        );
+
+        // Record blocked metric
+        record(result).catch(() => {});
+        pushEvent({
+        timestamp: new Date().toISOString(),
+        identifier: result.identifier,
+        algorithm: result.algorithm,
+        allowed: result.allowed,
+        remaining: result.remaining,
+        limit: result.limit,
+        });
+
+        if (onBlocked) return onBlocked(req, res, result);
+
+        return res.status(429).json({
+          error: "Too many requests",
+          message: `Rate limit exceeded. Try again in ${result.resetAt - Math.floor(Date.now() / 1000)}s`,
+          retryAfter: result.resetAt - Math.floor(Date.now() / 1000),
+          limit: result.limit,
+          algorithm: result.algorithm,
+        });
+      }
+
+      // Record allowed metric
+      record(result).catch(() => {});
+        pushEvent({
+        timestamp: new Date().toISOString(),
+        identifier: result.identifier,
+        algorithm: result.algorithm,
+        allowed: result.allowed,
+        remaining: result.remaining,
+        limit: result.limit,
+        });
+
+      req.rateLimit = result;
       next();
+
+    
     } catch (err) {
       console.error("Rate limiter error:", err.message);
       if (failOpen) return next();

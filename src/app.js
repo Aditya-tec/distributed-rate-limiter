@@ -3,12 +3,13 @@ const helmet = require("helmet");
 const cors = require("cors");
 const morgan = require("morgan");
 const demoRoutes = require("./routes/demo.routes");
-
+const adminRoutes = require("./routes/admin.routes");
 const app = express();
 
 app.use(helmet());
 app.use(cors());
 app.use(morgan("dev"));
+app.use("/admin", adminRoutes);
 app.use(express.json());
 
 app.get("/health", async (req, res) => {
