@@ -51,10 +51,10 @@ const streamEvents = (req, res) => {
   const client = { res };
   clients.add(client);
 
-  // Keep alive ping every 15s
+  // Keep alive ping every 5s (Render free tier cuts idle connections)
   const ping = setInterval(() => {
     res.write(": ping\n\n");
-  }, 15000);
+  }, 5000);
 
   req.on("close", () => {
     clearInterval(ping);
