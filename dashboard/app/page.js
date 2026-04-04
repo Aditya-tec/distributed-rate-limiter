@@ -5,7 +5,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from "recharts";
 
-const API = "http://localhost:5000";
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 const ALGO_META = {
   fixed:       { label: "Fixed window",   color: "#e8e8e8" },
