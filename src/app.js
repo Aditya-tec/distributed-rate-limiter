@@ -12,6 +12,7 @@ app.use(cors({
     "http://localhost:3000",
     process.env.DASHBOARD_URL || "",
   ].filter(Boolean),
+  methods: ["GET", "POST"],
 }));
 
 app.use(morgan("dev"));
