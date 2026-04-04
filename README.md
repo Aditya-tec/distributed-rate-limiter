@@ -27,28 +27,7 @@ A production-grade rate limiting system with **3 algorithms**, a real-time monit
 
 ## 🚀 Quick Start
 
-### Live Demo
-```bash
-# Visit the dashboard
-https://rate-limiter-dashboardd.vercel.app
 
-# Test Fixed Window (5 req/30s per IP)
-for ($i = 1; $i -le 10; $i++) {
-  Invoke-WebRequest https://distributed-rate-limiter-z2sa.onrender.com/demo/public -UseBasicParsing | Out-Null
-}
-
-# Test Sliding Window (5 req/30s per API key)
-for ($i = 1; $i -le 10; $i++) {
-  Invoke-WebRequest https://distributed-rate-limiter-z2sa.onrender.com/demo/authenticated -UseBasicParsing | Out-Null
-}
-
-# Test Token Bucket (burst capable)
-for ($i = 1; $i -le 10; $i++) {
-  Invoke-WebRequest -Method POST https://distributed-rate-limiter-z2sa.onrender.com/demo/expensive -UseBasicParsing | Out-Null
-}
-
-# Watch the dashboard update in real-time! 
-```
 
 ### Local Development
 
