@@ -7,7 +7,13 @@ const adminRoutes = require("./routes/admin.routes");
 const app = express();
 
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    process.env.DASHBOARD_URL || "",
+  ].filter(Boolean),
+}));
+
 app.use(morgan("dev"));
 app.use("/admin", adminRoutes);
 app.use(express.json());
