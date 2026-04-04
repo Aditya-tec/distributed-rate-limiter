@@ -1,162 +1,260 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 
 const API = "http://localhost:5000";
 
+const ALGO_META = {
+  fixed:       { label: "Fixed window",   color: "#e8e8e8" },
+  sliding:     { label: "Sliding window", color: "#a78bfa" },
+  tokenBucket: { label: "Token bucket",   color: "#34d399" },
+};
+
+const fmt = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+const StatCard = ({ label, value, sub, accent }) => (
+  <div style={{
+    background: "#0f0f0f",
+    border: "1px solid #1c1c1c",
+    borderRadius: 8,
+    padding: "20px 24px",
+  }}>
+    <p style={{ color: "#666", fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+      {label}
+    </p>
+    <p style={{ fontSize: 28, fontWeight: 600, color: accent || "#e8e8e8", letterSpacing: "-0.02em" }}>
+      {value}
+    </p>
+    {sub && <p style={{ color: "#444", fontSize: 12, marginTop: 4 }}>{sub}</p>}
+  </div>
+);
+
+const Pill = ({ ok }) => (
+  <span style={{
+    display: "inline-flex", alignItems: "center", gap: 6,
+    background: ok ? "#0a1a0f" : "#1a0a0a",
+    border: `1px solid ${ok ? "#1a3a22" : "#3a1a1a"}`,
+    color: ok ? "#34d399" : "#f87171",
+    borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 500,
+  }}>
+    <span style={{
+      width: 6, height: 6, borderRadius: "50%",
+      background: ok ? "#34d399" : "#f87171",
+      boxShadow: ok ? "0 0 6px #34d39966" : "0 0 6px #f8717166",
+    }} />
+    Redis {ok ? "connected" : "disconnected"}
+  </span>
+);
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{
+      background: "#111", border: "1px solid #222",
+      borderRadius: 6, padding: "10px 14px", fontSize: 12,
+    }}>
+      <p style={{ color: "#666", marginBottom: 6 }}>{label}</p>
+      {payload.map((p) => (
+        <p key={p.name} style={{ color: p.color, display: "flex", gap: 12, justifyContent: "space-between" }}>
+          <span>{p.name}</span>
+          <span style={{ fontWeight: 600 }}>{p.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const [metrics, setMetrics] = useState(null);
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const feedRef = useRef(null);
 
   const fetchMetrics = useCallback(async () => {
     try {
       const res = await fetch(`${API}/admin/metrics`);
-      const data = await res.json();
-      setMetrics(data);
-      setLoading(false);
-    } catch {
-      setLoading(false);
-    }
+      setMetrics(await res.json());
+    } catch {}
   }, []);
 
-  // Poll metrics every 5 seconds
   useEffect(() => {
     fetchMetrics();
-    const interval = setInterval(fetchMetrics, 5000);
-    return () => clearInterval(interval);
+    const t = setInterval(fetchMetrics, 5000);
+    return () => clearInterval(t);
   }, [fetchMetrics]);
 
-  // SSE live event feed
   useEffect(() => {
     const es = new EventSource(`${API}/admin/stream`);
     es.onmessage = (e) => {
-      const event = JSON.parse(e.data);
-      setEvents((prev) => [event, ...prev].slice(0, 50));
+      const ev = JSON.parse(e.data);
+      setEvents((prev) => [ev, ...prev].slice(0, 100));
     };
     return () => es.close();
   }, []);
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 text-white">
-      Loading...
-    </div>
-  );
-
   const chartData = metrics?.timeline?.labels?.map((label, i) => ({
     time: label,
-    allowed: metrics.timeline.allowed[i],
-    blocked: metrics.timeline.blocked[i],
+    Allowed: metrics.timeline.allowed[i],
+    Blocked: metrics.timeline.blocked[i],
   })) || [];
 
+  const totalReqs = (metrics?.summary?.totalAllowed || 0) + (metrics?.summary?.totalBlocked || 0);
+
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div style={{ minHeight: "100vh", padding: "32px 40px", maxWidth: 1280, margin: "0 auto" }}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Rate Limiter Dashboard</h1>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            metrics?.redis?.healthy ? "bg-green-900 text-green-300" : "bg-red-900 text-red-300"
-          }`}>
-            Redis {metrics?.redis?.healthy ? "● connected" : "● disconnected"}
-          </span>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
+        <div>
+          <h1 style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em", color: "#e8e8e8" }}>
+            Rate Limiter
+          </h1>
+          <p style={{ color: "#444", fontSize: 12, marginTop: 2 }}>
+            Distributed · 3 algorithms · Lua atomic ops
+          </p>
         </div>
+        <Pill ok={metrics?.redis?.healthy} />
+      </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: "Total allowed", value: metrics?.summary?.totalAllowed ?? 0, color: "text-green-400" },
-            { label: "Total blocked", value: metrics?.summary?.totalBlocked ?? 0, color: "text-red-400" },
-            { label: "Block rate", value: `${metrics?.summary?.blockRate ?? "0.0"}%`, color: "text-yellow-400" },
-            { label: "Redis memory", value: metrics?.redis?.memory ?? "—", color: "text-blue-400" },
-          ].map((card) => (
-            <div key={card.label} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-              <p className="text-gray-400 text-sm">{card.label}</p>
-              <p className={`text-3xl font-bold mt-1 ${card.color}`}>{card.value}</p>
-            </div>
-          ))}
-        </div>
+      {/* Top stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+        <StatCard label="Total requests" value={fmt(totalReqs)} />
+        <StatCard label="Allowed" value={fmt(metrics?.summary?.totalAllowed || 0)} accent="#34d399" />
+        <StatCard label="Blocked" value={fmt(metrics?.summary?.totalBlocked || 0)} accent="#f87171" />
+        <StatCard label="Block rate" value={`${metrics?.summary?.blockRate || "0.0"}%`}
+          accent={parseFloat(metrics?.summary?.blockRate) > 20 ? "#f87171" : "#e8e8e8"}
+          sub={`Redis ${metrics?.redis?.memory || "—"}`} />
+      </div>
 
-        {/* Algorithm counts */}
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: "Fixed window", key: "fixed", color: "border-blue-500" },
-            { label: "Sliding window", key: "sliding", color: "border-purple-500" },
-            { label: "Token bucket", key: "tokenBucket", color: "border-yellow-500" },
-          ].map((algo) => (
-            <div key={algo.key} className={`bg-gray-900 rounded-xl p-4 border-l-4 ${algo.color} border-t border-r border-b border-gray-800`}>
-              <p className="text-gray-400 text-sm">{algo.label}</p>
-              <p className="text-2xl font-bold mt-1">{metrics?.algorithms?.[algo.key] ?? 0} requests</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Timeline chart */}
-        <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-          <h2 className="text-lg font-semibold mb-4">Requests — last 60 minutes</h2>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="time" tick={{ fill: "#9CA3AF", fontSize: 11 }}
-                interval={9} />
-              <YAxis tick={{ fill: "#9CA3AF", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "#111827", border: "1px solid #374151" }} />
-              <Legend />
-              <Line type="monotone" dataKey="allowed" stroke="#34D399"
-                strokeWidth={2} dot={false} name="Allowed" />
-              <Line type="monotone" dataKey="blocked" stroke="#F87171"
-                strokeWidth={2} dot={false} name="Blocked" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Top blocked */}
-          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <h2 className="text-lg font-semibold mb-4">Top blocked identifiers</h2>
-            {metrics?.topBlocked?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No blocked requests yet</p>
-            ) : (
-              <div className="space-y-2">
-                {metrics?.topBlocked?.map((item) => (
-                  <div key={item.identifier}
-                    className="flex justify-between items-center py-2 border-b border-gray-800">
-                    <span className="text-sm font-mono text-gray-300">{item.identifier}</span>
-                    <span className="text-red-400 font-bold text-sm">{item.count} blocks</span>
-                  </div>
-                ))}
-              </div>
-            )}
+      {/* Algorithm row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 }}>
+        {Object.entries(ALGO_META).map(([key, meta]) => (
+          <div key={key} style={{
+            background: "#0f0f0f",
+            border: "1px solid #1c1c1c",
+            borderRadius: 8,
+            padding: "16px 24px",
+            borderLeft: `2px solid ${meta.color}`,
+          }}>
+            <p style={{ color: "#555", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 6 }}>
+              {meta.label}
+            </p>
+            <p style={{ fontSize: 22, fontWeight: 600, color: meta.color, letterSpacing: "-0.02em" }}>
+              {fmt(metrics?.algorithms?.[key] || 0)}
+              <span style={{ fontSize: 13, color: "#444", fontWeight: 400, marginLeft: 4 }}>req</span>
+            </p>
           </div>
+        ))}
+      </div>
 
-          {/* Live event feed */}
-          <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <h2 className="text-lg font-semibold mb-4">
-              Live feed
-              <span className="ml-2 inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            </h2>
-            <div className="space-y-1 max-h-64 overflow-y-auto">
-              {events.length === 0 ? (
-                <p className="text-gray-500 text-sm">Waiting for requests...</p>
-              ) : (
-                events.map((ev, i) => (
-                  <div key={i} className={`flex justify-between text-xs py-1 px-2 rounded font-mono ${
-                    ev.allowed ? "bg-green-950 text-green-300" : "bg-red-950 text-red-300"
-                  }`}>
-                    <span>{ev.allowed ? "✅" : "🚫"} {ev.identifier}</span>
-                    <span className="text-gray-500">{ev.algorithm} · {ev.remaining} left</span>
-                  </div>
-                ))
-              )}
+      {/* Chart */}
+      <div style={{
+        background: "#0f0f0f", border: "1px solid #1c1c1c",
+        borderRadius: 8, padding: "24px", marginBottom: 24,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "#e8e8e8" }}>Request volume</p>
+          <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#555" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 20, height: 1.5, background: "#34d399", display: "inline-block" }} />
+              Allowed
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 20, height: 1.5, background: "#f87171", display: "inline-block" }} />
+              Blocked
+            </span>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="ga" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#34d399" stopOpacity={0.15} />
+                <stop offset="95%" stopColor="#34d399" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#f87171" stopOpacity={0.15} />
+                <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid stroke="#161616" strokeDasharray="0" />
+            <XAxis dataKey="time" tick={{ fill: "#444", fontSize: 11 }} tickLine={false} axisLine={false} interval={9} />
+            <YAxis tick={{ fill: "#444", fontSize: 11 }} tickLine={false} axisLine={false} />
+            <Tooltip content={<CustomTooltip />} />
+            <Area type="monotone" dataKey="Allowed" stroke="#34d399" strokeWidth={1.5} fill="url(#ga)" dot={false} />
+            <Area type="monotone" dataKey="Blocked" stroke="#f87171" strokeWidth={1.5} fill="url(#gb)" dot={false} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Bottom row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+
+        {/* Top blocked */}
+        <div style={{ background: "#0f0f0f", border: "1px solid #1c1c1c", borderRadius: 8, padding: 24 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, color: "#e8e8e8", marginBottom: 16 }}>Top blocked</p>
+          {!metrics?.topBlocked?.length ? (
+            <p style={{ color: "#333", fontSize: 13 }}>No blocked requests recorded</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {metrics.topBlocked.map((item, i) => (
+                <div key={item.identifier} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "10px 0",
+                  borderBottom: i < metrics.topBlocked.length - 1 ? "1px solid #161616" : "none",
+                }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 12, color: "#888" }}>
+                    {item.identifier}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#f87171" }}>
+                    {item.count}
+                  </span>
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+
+        {/* Live feed */}
+        <div style={{ background: "#0f0f0f", border: "1px solid #1c1c1c", borderRadius: 8, padding: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: "#e8e8e8" }}>Live feed</p>
+            <span style={{
+              width: 6, height: 6, borderRadius: "50%", background: "#34d399",
+              boxShadow: "0 0 8px #34d39988",
+              animation: "pulse 2s ease-in-out infinite",
+            }} />
+          </div>
+          <div ref={feedRef} style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+            {!events.length ? (
+              <p style={{ color: "#333", fontSize: 13 }}>Waiting for requests...</p>
+            ) : events.map((ev, i) => (
+              <div key={i} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "5px 8px", borderRadius: 4,
+                background: ev.allowed ? "#0a1a0f" : "#1a0a0a",
+              }}>
+                <span style={{ fontFamily: "monospace", fontSize: 11, color: ev.allowed ? "#34d399" : "#f87171" }}>
+                  {ev.identifier}
+                </span>
+                <span style={{ fontSize: 11, color: "#444", whiteSpace: "nowrap", marginLeft: 12 }}>
+                  {ev.algorithm} · {ev.remaining} left
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
       </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 }
