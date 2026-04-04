@@ -67,7 +67,7 @@ const getTopBlocked = async (count = 10) => {
 };
 
 const getAlgorithmCounts = async () => {
-  const [fixed, sliding, token] = await Promise.all([
+  const [fixed, sliding, tokenBucket] = await Promise.all([
     redis.get("rl:metrics:algo:fixed"),
     redis.get("rl:metrics:algo:sliding"),
     redis.get("rl:metrics:algo:token-bucket"),
@@ -75,7 +75,7 @@ const getAlgorithmCounts = async () => {
   return {
     fixed: parseInt(fixed) || 0,
     sliding: parseInt(sliding) || 0,
-    tokenBucket: parseInt(token) || 0,
+    tokenBucket: parseInt(tokenBucket) || 0,
   };
 };
 
