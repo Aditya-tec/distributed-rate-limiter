@@ -2,7 +2,7 @@
 
 A production-grade rate limiting system with **3 algorithms**, a real-time monitoring dashboard, and full cloud deployment.
 
-**[🔗 Live Demo](https://rate-limiter-dashboardd.vercel.app)** — See it in action
+**[🔗 Live Demo](https://rate-limiter-dashboardd.vercel.app)** — See it in action.
 
 ---
 
